@@ -39,7 +39,7 @@ Then add this to `~/.claude/settings.json`:
 
 ```json
 {
-  "statusLine": { "type": "command", "command": "~/.claude/statusline.sh" }
+  "statusLine": { "type": "command", "command": "~/.claude/statusline.sh", "refreshInterval": 30 }
 }
 ```
 
