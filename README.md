@@ -3,7 +3,7 @@
 A colorful status line for [Claude Code](https://claude.com/claude-code). It shows your plan limits, context, cost and tokens at a glance.
 
 ```
-✻ Opus 5.5  │  ◷ 5h ▰▰▱▱▱▱▱▱ 23% ↻ 2h12m  │  ◈ wk ▰▰▰▰▰▱▱▱ 67% ↻ 3d11h19m  │  ◐ ctx ▰▰▰▰▰▰▰▱ 12% left  │  💰 $12.35 · 1.5M tok
+✻ Opus 5.5  │  ◷ 5h ▰▰▱▱▱▱▱▱ 23% ↻ 2h12m  │  ◈ wk ▰▰▰▰▰▱▱▱ 67% ↻ 3d11h19m  │  ◐ ctx ▰▰▰▰▰▰▰▱ 12% left  │  ⛁ cache 94% ⏳ 4m  │  💰 $12.35 · 1.5M tok
 ```
 
 ## What it shows
@@ -14,6 +14,7 @@ A colorful status line for [Claude Code](https://claude.com/claude-code). It sho
 | `◷ 5h` | 5-hour session limit used, and time until it resets |
 | `◈ wk` | Weekly limit used, and time until it resets |
 | `◐ ctx` | Context window used (bar) and remaining (number) |
+| `⛁ cache` | Prompt cache hit rate of the last request, and time until the cache expires (5m or 1h TTL, read from the transcript) |
 | `💰` | Session cost in USD and total tokens (input + output) |
 
 Bars turn green, then amber at 50%, then red at 80%.
