@@ -1,6 +1,7 @@
 #!/bin/bash
 export LC_ALL=C.UTF-8  # so ${#var} counts characters, not bytes
-# Claude Code status line: model, plan limits with bars, session tokens (main + subagents), context left.
+# Claude Code status line: model, plan limits with bars, session tokens (main + subagents), context left,
+# background /implement-long runs.
 # Bar colors by how full: green < 50, amber < 80, red >= 80.
 input=$(cat)
 # Last API usage from transcript: cache read/write split and 5m vs 1h TTL.
@@ -45,6 +46,17 @@ if [ -n "$sid" ] && mkdir -p "$state_dir" 2>/dev/null; then
   find "$state_dir" -name '*.json' -mtime +8 -delete 2>/dev/null
 fi
 
+# Background /implement-long runs (software-factory): running, or finished in the last 2h.
+# Read through implement-long-stats.py in the project's .claude/, else in ~/.claude/.
+runs='[]'
+proj=$(jq -r '.workspace.project_dir // .cwd // empty' <<<"$input")
+for d in "$proj/.claude" "$HOME/.claude"; do
+  if [ -f "$d/tools/implement-long-stats.py" ] && compgen -G "$d/runs/*.json" >/dev/null; then
+    runs=$(python3 -I "$d/tools/implement-long-stats.py" status 2>/dev/null) || runs='[]'
+    break
+  fi
+done
+
 # Terminal width: statusline has no tty of its own, so read the parent's.
 tty=$(ps -o tty= -p "$PPID" 2>/dev/null | tr -d ' ')
 width=$( { stty size <"/dev/$tty" || stty size </dev/tty; } 2>/dev/null | cut -d' ' -f2)
@@ -55,7 +67,7 @@ width=$(( ${width:-${COLUMNS:-80}} - 4 ))  # margin for Claude Code padding
 # wrap onto more lines only in very narrow panes. Then, in order of importance, items grow
 # or appear while everything still fits in the lines the core items need (see "steps").
 jq -r --argjson width "$width" --argjson last "${last:-null}" --argjson state "${state:-null}" \
-  --argjson main "${main:-{\}}" --argjson sub "${sub:-{\}}" '
+  --argjson main "${main:-{\}}" --argjson sub "${sub:-{\}}" --argjson runs "${runs:-[]}" '
   def c($code): "\u001b[\($code)m";
   def r: c("0");
   def dim: c("38;5;240");
@@ -75,10 +87,25 @@ jq -r --argjson width "$width" --argjson last "${last:-null}" --argjson state "$
   def visible: gsub("\u001b\\[[0-9;]*m"; "") | length;
   def total: [.[]] | add // 0;
   # One-column letters, so the width count stays right.
-  def model_icon: {fable: c("1;38;5;213") + "F", opus: c("1;38;5;166") + "O",
-    sonnet: c("1;38;5;117") + "S", haiku: c("1;38;5;114") + "H"}[.] // (dim + .);
+  def model_icon: {fable: (c("1;38;5;213") + "F"), opus: (c("1;38;5;166") + "O"),
+    sonnet: (c("1;38;5;117") + "S"), haiku: (c("1;38;5;114") + "H")}[.] // (dim + .);
   # "S 1.1M, H 9k": per model, largest first.
   def models: to_entries | sort_by(-.value) | map("\(.key | model_icon)\(r) \(.value | k)") | join(", ");
+  def usd: "$\(. * 100 | round / 100 | tostring
+    | if test("\\.") then (. + "0" | match("^[0-9]+\\.[0-9]{2}").string) else . + ".00" end)";
+
+  # /implement-long runs: "⚙ sheet-view 12m", "⚙ impl sheet-view 12m · Σ 1.2M · ctx 84k · $0.84".
+  def run_forms: if $runs == [] then [""] else
+    ($runs | map(
+      ({running: (c("1;38;5;136") + "⚙"), done: (c("1;38;5;114") + "✓")}[.status] // (c("1;38;5;203") + "✗")) as $icon
+      | (.name | if length > 18 then .[:17] + "…" else . end) as $name
+      | ["\($icon)\(r) \($name) \(.elapsed_s | dur)",
+         "\($icon)\(r) \(dim)impl\(r) \($name) \(.elapsed_s | dur)"
+         + (if .tokens > 0 then " \(dim)·\(r) \(c("38;5;141"))Σ\(r) \(.tokens | k)" else "" end)
+         + (if .ctx then " \(dim)· ctx\(r) \(.ctx | k)" else "" end)
+         + (if .cost_usd then " \(dim)·\(r) \(c("1;38;5;150"))\(.cost_usd | usd)\(r)" else "" end)
+         + (if .status == "running" or .status == "done" then "" else " \(c("1;38;5;203"))\(.status)\(r)" end)])) as $each
+    | [($each | map(.[0]) | join("  ")), ($each | map(.[1]) | join("  "))] end;
 
   # Limit forms: "5h +9%" (this session), "5h 54% +9%", with bar, with reset time.
   # $core: the short form shows the share of this session; otherwise the item starts hidden.
@@ -137,14 +164,15 @@ jq -r --argjson width "$width" --argjson last "${last:-null}" --argjson state "$
       "5h": limit("5h"; $h; $state.five_hour; true),
       wk: limit("wk"; $w; $state.seven_day; false),
       cost: ["", (if .cost.total_cost_usd then "\(c("1;38;5;150"))$\(.cost.total_cost_usd * 100 | round / 100 | tostring
-        | if test("\\.") then (. + "0" | match("^[0-9]+\\.[0-9]{2}").string) else . + ".00" end)\(r)" else "" end)]
+        | if test("\\.") then (. + "0" | match("^[0-9]+\\.[0-9]{2}").string) else . + ".00" end)\(r)" else "" end)],
+      run: (try run_forms catch [""])
     } as $forms
   # Display order.
-  | ["model", "ctx", "cache", "tok", "5h", "wk", "cost"] as $order
+  | ["model", "ctx", "cache", "tok", "5h", "wk", "cost", "run"] as $order
   | def render: . as $lv | [$order[] | $forms[.][$lv[.]] | select(. != "")] | pack;
   # Most important first: core items grow before the extras appear.
   [["ctx", 1], ["cache", 1], ["tok", 1], ["5h", 1], ["wk", 1], ["model", 1], ["tok", 2],
-   ["ctx", 2], ["5h", 2], ["wk", 2], ["cost", 1], ["cache", 2], ["5h", 3], ["wk", 3]] as $steps
+   ["run", 1], ["ctx", 2], ["5h", 2], ["wk", 2], ["cost", 1], ["cache", 2], ["5h", 3], ["wk", 3]] as $steps
   | ($order | map({key: ., value: 0}) | from_entries) as $base
   | ($base | render | length) as $lines
   | reduce $steps[] as [$key, $n] ($base;
