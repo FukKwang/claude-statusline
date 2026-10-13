@@ -46,7 +46,7 @@ if [ -n "$sid" ] && mkdir -p "$state_dir" 2>/dev/null; then
   find "$state_dir" -name '*.json' -mtime +8 -delete 2>/dev/null
 fi
 
-# Background /implement-long runs (software-factory): running, or finished in the last 2h.
+# Background /implement-long runs (software-factory): the latest one still running.
 # Read through implement-long-stats.py in the project's .claude/, else in ~/.claude/.
 runs='[]'
 proj=$(jq -r '.workspace.project_dir // .cwd // empty' <<<"$input")
@@ -95,7 +95,9 @@ jq -r --argjson width "$width" --argjson last "${last:-null}" --argjson state "$
     | if test("\\.") then (. + "0" | match("^[0-9]+\\.[0-9]{2}").string) else . + ".00" end)";
 
   # /implement-long runs: "⚙ sheet-view 12m", "⚙ impl sheet-view 12m · Σ 1.2M · ctx 84k · $0.84".
-  def run_forms: if $runs == [] then [""] else
+  # Only the most recently started run that is still running; finished runs are hidden.
+  def run_forms: ($runs | map(select(.status == "running")) | sort_by(.elapsed_s) | .[:1]) as $runs
+    | if $runs == [] then [""] else
     ($runs | map(
       ({running: (c("1;38;5;136") + "⚙"), done: (c("1;38;5;114") + "✓")}[.status] // (c("1;38;5;203") + "✗")) as $icon
       | (.name | if length > 18 then .[:17] + "…" else . end) as $name

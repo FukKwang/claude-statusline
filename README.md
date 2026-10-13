@@ -30,7 +30,7 @@ A narrow pane:
 | `$3.90` | Session cost in USD |
 | `94% hit` | Cache hit rate of the last request |
 | `↻ 16:06` | When the limit resets, in local time (`↻ Wed 21:43` when more than a day away) |
-| `⚙ my-app 21m` | A background [`/implement-long`](https://github.com/FukKwang/software-factory) run: `⚙` running, `✓` done, `✗` failed or died; finished runs stay 2 hours. Wide: `⚙ impl my-app 21m · Σ 1.2M · ctx 84k · $0.84` (tokens, its context, cost). Shown only when such runs exist (see below) |
+| `⚙ my-app 21m` | The most recently started background [`/implement-long`](https://github.com/FukKwang/software-factory) run that is still running; finished runs are hidden. Wide: `⚙ impl my-app 21m · Σ 1.2M · ctx 84k · $0.84` (tokens, its context, cost). Shown only when such runs exist (see below) |
 
 Colors: green, then amber from 50%, then red from 80%. The cache time is amber below 2 minutes and red when expired.
 
@@ -83,7 +83,7 @@ The status line appears after your next message.
 
 ## `/implement-long` runs
 
-[software-factory](https://github.com/FukKwang/software-factory)'s `/implement-long` runs impl-lead as a headless `claude -p` session in the background. When `.claude/tools/implement-long-stats.py` and `.claude/runs/*.json` exist in the project (or in `~/.claude/`), the status line shows each running run and each run that finished in the last 2 hours. Without them nothing changes.
+[software-factory](https://github.com/FukKwang/software-factory)'s `/implement-long` runs impl-lead as a headless `claude -p` session in the background. When `.claude/tools/implement-long-stats.py` and `.claude/runs/*.json` exist in the project (or in `~/.claude/`), the status line shows the most recently started run that is still running. Without them nothing changes.
 
 ## Customize
 
